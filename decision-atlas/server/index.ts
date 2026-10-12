@@ -1,4 +1,3 @@
-import cors from "cors";
 import express from "express";
 import {
   createReflection,
@@ -14,11 +13,13 @@ import {
   updateScenarioOption,
 } from "./repository";
 
+import { clearSession, createSession, requireSameOrigin, requireSession } from "./session";
+
 const app = express();
 const port = Number(process.env.PORT || 3001);
 
-app.use(cors());
 app.use(express.json({ limit: "2mb" }));
+app.use("/api", requireSameOrigin);
 
 function ensureNonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
@@ -59,6 +60,8 @@ app.post("/api/auth/register", async (req, res, next) => {
     }
 
     const user = await registerUser({ name, email, password });
+    if (!user) throw new Error("Unable to establish session");
+    createSession(req, res, user.id);
     res.status(201).json({ user });
   } catch (error) {
     next(error);
@@ -73,15 +76,29 @@ app.post("/api/auth/login", async (req, res, next) => {
     }
 
     const user = await loginUser({ email, password });
+    if (!user) throw new Error("Unable to establish session");
+    createSession(req, res, user.id);
     res.json({ user });
   } catch (error) {
     next(error);
   }
 });
 
+app.use("/api", requireSession);
+
+app.get("/api/auth/me", (_req, res) => {
+  res.json({ user: getUserById(res.locals.userId) });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  clearSession(req, res);
+  res.status(204).end();
+});
+
 app.get("/api/users/:userId/bootstrap", (req, res, next) => {
   try {
-    getUserOrThrow(req.params.userId);
+    if (req.params.userId !== res.locals.userId) return res.status(403).json({ error: "Access denied." });
+    getUserOrThrow(res.locals.userId);
     res.json(getBootstrap(req.params.userId));
   } catch (error) {
     next(error);
@@ -265,10 +282,10 @@ app.post("/api/scenarios/:scenarioId/reflections", (req, res, next) => {
 
 app.use((error: Error & { status?: number }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const status = error.status ?? 500;
-  const message = error.message || "Unexpected server error";
+  const message = status >= 500 ? "Internal server error" : error.message || "Request failed";
   res.status(status).json({ error: message });
 });
 
-app.listen(port, () => {
+app.listen(port, process.env.HOST ?? "127.0.0.1", () => {
   console.log(`Decision Atlas API listening on http://localhost:${port}`);
 });

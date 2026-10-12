@@ -1,5 +1,5 @@
-import { createContext, useContext, useState } from "react";
-import { loginUser, registerUser } from "../lib/api";
+import { createContext, useContext, useEffect, useState } from "react";
+import { getSessionUser, loginUser, logoutUser, registerUser } from "../lib/api";
 import type { User } from "../lib/types";
 
 type AuthValue = {
@@ -35,34 +35,22 @@ function normalizeUser(candidate: unknown): User | null {
   return { id, name, email, createdAt };
 }
 
-function readStoredUser() {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    const parsed = raw ? JSON.parse(raw) : null;
-    const normalized = normalizeUser(parsed);
-
-    if (!normalized && raw) {
-      localStorage.removeItem(SESSION_KEY);
-    }
-
-    return normalized;
-  } catch {
-    localStorage.removeItem(SESSION_KEY);
-    return null;
-  }
-}
-
-function persistUser(user: User | null) {
-  if (user) {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    return;
-  }
-
-  localStorage.removeItem(SESSION_KEY);
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => readStoredUser());
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    localStorage.removeItem(SESSION_KEY);
+    getSessionUser().then(({ user: currentUser }) => {
+      if (active) setUser(normalizeUser(currentUser));
+    }).catch(() => {
+      if (active) setUser(null);
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, []);
 
   async function login(email: string, password: string) {
     try {
@@ -74,7 +62,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setUser(normalized);
-      persistUser(normalized);
       return { success: true };
     } catch (error) {
       return {
@@ -94,7 +81,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setUser(normalized);
-      persistUser(normalized);
       return { success: true };
     } catch (error) {
       return {
@@ -105,12 +91,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   function logout() {
-    setUser(null);
-    persistUser(null);
+    void logoutUser().then(() => setUser(null)).catch(() => {
+      // Retain the session display if the server did not confirm revocation.
+      window.alert("Sign out failed. Please try again.");
+    });
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading: false, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

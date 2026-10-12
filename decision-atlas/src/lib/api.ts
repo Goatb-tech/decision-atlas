@@ -4,6 +4,7 @@ const API_BASE = "/api";
 
 async function request<T>(path: string, options: RequestInit = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers ?? {}),
@@ -131,4 +132,12 @@ export async function createReflection(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function getSessionUser() {
+  return request<{ user: User }>("/auth/me");
+}
+
+export async function logoutUser() {
+  return request("/auth/logout", { method: "POST", body: "{}" });
 }

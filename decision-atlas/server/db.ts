@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const dataDir = path.join(projectRoot, "data");
-const databasePath = path.join(dataDir, "decision-atlas.sqlite");
+const databasePath = process.env.SQLITE_PATH ?? path.join(dataDir, "decision-atlas.sqlite");
 
 fs.mkdirSync(dataDir, { recursive: true });
 

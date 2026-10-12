@@ -9,7 +9,8 @@
     "dev:server": "tsx watch server/index.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "server": "tsx server/index.ts"
+    "server": "tsx server/index.ts",
+    "test:security": "python3 tests/security-smoke.py"
   },
   "dependencies": {
     "@fontsource/outfit": "^5.2.8",
